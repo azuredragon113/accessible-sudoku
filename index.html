@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<title>Accessible Sudoku</title>
+		<meta charset="utf8" />
+		<style>
+		input[type="text"] {
+			height:3rem;
+			width:3rem;
+			font-size:250%;
+			appearance:textfield;
+			text-align:center;
+			border:1px solid #000;
+			margin:0;
+		}
+		input[type="text"].given {
+			background-color:#eee;
+		}
+		#puzzle {
+			border-collapse:collapse;
+			border-left:2px solid #000;
+			border-top:2px solid #000;
+		}
+		#puzzle td:nth-child(3n) {
+			border-right:2px solid #000;
+		}
+		#puzzle tr:nth-child(3n) {
+			border-bottom:2px solid #000;
+		}
+		#puzzle td {
+			padding:0;
+		}
+
+		#alerts {
+			white-space:pre;
+			font-size:125%;
+			border:1px solid #000;
+			min-height:1.5rem;
+		}
+		</style>
+	</head>
+	<body>
+		<header>
+			<h1>Accessible Sudoku</h1>
+			<p>
+				When you are in the grid, navigate columns using Tab or Shift Tab and rows using Enter or Shift Enter.<br />
+				Input numbers 1 to 9 into blank cells, or press 0 to clear the cell.<br />
+				The following keyboard shortcuts are available within the grid:<br />
+				<span id="help">
+				A: Read current row,<br />
+				S: Read current column,<br />
+				D: Read current 3 by 3 block,<br />
+				F: Check puzzle,<br />
+				? Question Mark: Repeat these shortcuts
+				</span>
+			</p>
+		</header>
+		<nav id="reset">
+			<h2>Reset Puzzle</h2>
+			<button value="easy">Easy</button>
+			<button value="medium">Medium</button>
+			<button value="hard">Hard</button>
+			<button value="very-hard">Very Hard</button>
+			<button value="insane">Insane</button>
+			<button value="inhuman">Inhuman</button>
+		</nav>
+		<main>
+			<p id="alerts" role="alert" aria-live="assertive"></p>
+			<table id="puzzle" role="application"></table>
+		</main>
+		<footer>
+			<p>Sudoku generator: <a href="https://github.com/robatron/sudoku.js">sudoku.js by robatron on GitHub</a></p>
+		</footer>
+
+		<script type="text/javascript" src="sudoku.js"></script>
+		<script type="text/javascript">
+		var puzzle = '';
+		var puzbox = document.getElementById('puzzle');
+
+		// Set the board
+		function resetPuz(difficulty) {
+			puzzle = sudoku.generate(difficulty);
+
+			var grid = sudoku.board_string_to_grid(puzzle);
+			var table = '';
+			for (var row in grid) {
+				table += '<tr>';
+				for (var cell in grid[row]) {
+					table += '<td data-pos="'+row+','+cell+'"><input type="text" value="';
+					if (grid[row][cell]=='.') {
+						table += '"';
+					} else {
+						table += grid[row][cell]+'" class="given" data-val="'+grid[row][cell]+'"';
+					}
+					table += ' /></td>';
+				}
+				table += '</tr>';
+			}
+			puzbox.innerHTML = table;
+		}
+		resetPuz('easy');
+
+		// Focus alerts
+		var alerts = document.getElementById('alerts');
+		var inputs = document.getElementsByTagName('input');
+		for (var i in inputs) {
+			inputs[i].onfocus = function(e) {
+				var cur = e.target;
+				var alertTxt = '';
+
+				// Current value
+				if (cur.className=='given') {
+					alertTxt += 'Given '+cur.value+', ';
+				} else if (cur.value.length) {
+					alertTxt += cur.value+', ';
+				} else {
+					alertTxt += 'Blank, ';
+				}
+
+				// Current cell position
+				var pos = cur.parentNode.dataset.pos.split(',');
+				alertTxt += 'row '+(pos[0]*1+1)+', column '+(pos[1]*1+1)+', block '+(Math.floor(pos[0]/3)*3+Math.floor(pos[1]/3)+1)+'\n';
+				alerts.innerHTML = alertTxt;
+			};
+		}
+
+		// Keyboard shortcuts
+		puzbox.onkeypress = function(e) {
+			switch (e.keyCode) {
+				// Advance row
+				case 13: // Enter
+					var pos = e.target.parentNode.dataset.pos.split(',');
+					if (e.shiftKey) {
+						if (pos[0]=='0') return;
+						document.querySelector('td[data-pos="'+(pos[0]-1)+','+pos[1]+'"] input').focus();
+					} else {
+						if (pos[0]=='8') return;
+						document.querySelector('td[data-pos="'+(pos[0]*1+1)+','+pos[1]+'"] input').focus();
+					}
+					return false;
+
+				// Read the current row
+				case 65: case 97: // a
+					var pos = e.target.parentNode.dataset.pos.split(',');
+					var alertTxt = 'Row '+(pos[0]*1+1)+' has';
+					var row = e.target.parentNode.parentNode.getElementsByTagName('input');
+					var checker = []
+					var bad = false;
+					for (var i=0; i<row.length; ++i) {
+						if (row[i].value.length) {
+							alertTxt += ' '+row[i].value;
+							if (checker[row[i].value]) bad = true;
+							else checker[row[i].value]=true;
+						} else {
+							alertTxt += ' blank';
+						}
+					}
+					if (bad) alertTxt += '; row contains a duplicate';
+					alerts.innerHTML = alertTxt;
+					return false;
+
+				// Read the current column
+				case 83: case 115: // s
+					var pos = e.target.parentNode.dataset.pos.split(',');
+					var alertTxt = 'Column '+(pos[1]*1+1)+' has';
+					var col = document.querySelectorAll('td[data-pos$="'+pos[1]+'"] input');
+					var checker = [];
+					var bad = false;
+					for (var i=0; i<col.length; ++i) {
+						if (col[i].value.length) {
+							alertTxt += ' '+col[i].value;
+							if (checker[col[i].value]) bad = true;
+							else checker[col[i].value]=true;
+						} else {
+							alertTxt += ' blank';
+						}
+					}
+					if (bad) alertTxt += '; column contains a duplicate';
+					alerts.innerHTML = alertTxt;
+					return false;
+
+				// Read current 3x3 box
+				case 68: case 100: // d
+					var pos = e.target.parentNode.dataset.pos.split(',');
+					var posBoxR = Math.floor(pos[0]/3);
+					var posBoxC = Math.floor(pos[1]/3);
+					var alertTxt = 'Block '+(posBoxR*3+posBoxC+1)+' has';
+					var nums = document.getElementsByTagName('input');
+					var checker = [];
+					var bad = false;
+					for (var i=0; i<nums.length; ++i) {
+						var boxR = Math.floor(Math.floor(i/9)/3);
+						var boxC = Math.floor((i%9)/3);
+						if (boxR==posBoxR && boxC==posBoxC) {
+							if (nums[i].value.length) {
+								alertTxt += ' '+nums[i].value;
+								if (checker[nums[i].value]) bad = true;
+								else checker[nums[i].value]=true;
+							} else {
+								alertTxt += ' blank';
+							}
+						} else if (boxR > posBoxR) {
+							break;
+						}
+					}
+					if (bad) alertTxt += '; block contains a duplicate';
+					alerts.innerHTML = alertTxt;
+					return false;
+
+				// Check puzzle progress/solution
+				case 70: case 102: // f
+					var nums = document.getElementsByTagName('input');
+					var numsTxt = '';
+					var blanks = 0;
+					for (var i=0; i<nums.length; ++i) {
+						var val = nums[i].value*1;
+						if (val>0) {
+							numsTxt += val;
+						} else {
+							numsTxt += '.';
+							++blanks;
+						}
+					}
+
+					if (blanks>0) {
+						alerts.innerHTML = 'You have '+blanks+' blank'+((blanks==1)? '':'s');
+					} else if (sudoku.solve(numsTxt)==numsTxt) {
+						alerts.innerHTML = 'Congratulations, you have solved the puzzle!';
+					} else {
+						alerts.innerHTML = 'The puzzle contains errors';
+					}
+					//console.log(numsTxt);
+					return false;
+
+				// Shortcuts / help
+				case 47: case 63: // ?/
+					alerts.innerHTML = document.getElementById('help').innerHTML.replace(/[\t\r\n]/g,'').replace(/<br>/g,'\n');
+					return false;
+
+				//default:
+				//	console.log(e.keyCode);
+			}
+		};
+
+		// Value checks
+		puzbox.onkeyup = function(e) {
+			// Manual readonly (to preserve keyboard shortcuts; screen readers return to browse mode for readonly cells)
+			if (e.target.className=='given') {
+				if (e.target.value!=e.target.dataset.val) {
+					e.target.value = e.target.dataset.val;
+					alerts.innerHTML = 'Given value '+e.target.dataset.val;
+				}
+			} else {
+				// Validation (remove non-numbers, assume last digit if it's multiple)
+				e.target.value = e.target.value.replace(/[^0-9]+/,'').slice(-1);
+				if (e.target.value=='0') e.target.value = ''; // Clear if zero
+			}
+		};
+
+		// Reset puzzle
+		var btns = document.getElementsByTagName('button');
+		for (var i=0; i<btns.length; ++i) {
+			btns[i].onclick = function(e) {
+				resetPuz(e.target.value);
+				alerts.innerHTML = 'Puzzle has been generated with difficulty '+e.target.innerHTML;
+			};
+		}
+		</script>
+	</body>
+</html>
